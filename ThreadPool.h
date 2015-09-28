@@ -34,6 +34,7 @@ namespace xthread {
         void Clear()
         {
             std::unique_lock<std::mutex> lock(m_);
+            exit_ = false;
             tasks_.clear();
         }
 
