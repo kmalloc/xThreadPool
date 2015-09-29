@@ -2,9 +2,13 @@
 
 #include "ThreadPool.h"
 
+#include <atomic>
+
 using namespace xthread;
 
-TEST(test_xthread, test_basic_thread)
+std::atomic<int> g_test_pass{0};
+
+void basic_testing()
 {
     ThreadPool pool(4);
 
@@ -37,16 +41,16 @@ TEST(test_xthread, test_basic_thread)
     {
         std::unique_lock<std::mutex> lock{m1};
         while (!f1) cv1.wait(lock);
-
-        ASSERT_EQ(233, i1);
     }
+
+    ASSERT_EQ(233, i1);
 
     {
         std::unique_lock<std::mutex> lock{m2};
         while (!f2) cv2.wait(lock);
-
-        ASSERT_EQ(234, i2);
     }
+
+    ASSERT_EQ(234, i2);
 
     pool.CloseThread(true);
     pool.Shutdown();
@@ -54,11 +58,20 @@ TEST(test_xthread, test_basic_thread)
     ASSERT_EQ(1024, s);
 }
 
-TEST(test_xthread, test_exiting_pool)
+TEST(test_xthread, test_basic_thread)
+{
+    for (int i = 0; i < 1264; ++i)
+    {
+        std::cout << i << "-th basic test." << std::endl;
+        basic_testing();
+    }
+
+    g_test_pass++;
+}
+
+void test_exit()
 {
     ThreadPool pool(4);
-
-    pool.StartWorking();
 
     bool f1 = false, f2 = false, f3 = false, f4 = false;
     std::mutex m, m1, m2, m3, m4;
@@ -81,17 +94,19 @@ TEST(test_xthread, test_exiting_pool)
     pool.PushTask(bt3);
     pool.PushTask(bt4);
 
-    // following 4 task should not have a chance to run.
-    pool.PushTask(rt1);
-    pool.PushTask(rt2);
-    pool.PushTask(rt3);
-    pool.PushTask(rt4);
+    pool.StartWorking();
 
     // make sure all the threads are running.
     {
         std::unique_lock<std::mutex> lock{m};
         while (s != 4) cv.wait(lock);
     }
+
+    // following 4 task should not have a chance to run.
+    pool.PushTask(rt1);
+    pool.PushTask(rt2);
+    pool.PushTask(rt3);
+    pool.PushTask(rt4);
 
     // cancel all the threads immediately.
     pool.CloseThread(false);
@@ -128,6 +143,7 @@ TEST(test_xthread, test_exiting_pool)
     ASSERT_EQ(0, v4);
 
     // test gracefully shutdown.
+    s = 0;
     f1 = f2 = f3 = f4 = false;
     pool.StartWorking();
 
@@ -176,8 +192,20 @@ TEST(test_xthread, test_exiting_pool)
     ASSERT_EQ(40, v4);
 }
 
+TEST(test_xthread, test_exiting_pool)
+{
+    for (int i = 0; i < 1024; ++i)
+    {
+        test_exit();
+    }
+
+    g_test_pass++;
+}
+
 TEST(test_xthread, performance_test)
 {
+    if (g_test_pass < 2) return;
+
     ThreadPool pool;
     pool.StartWorking();
 
@@ -224,7 +252,7 @@ TEST(test_xthread, performance_test)
 
     std::thread thread1(th1), thread2(th2), thread3(th3);
 
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     {
         std::unique_lock<std::mutex> lock{m1};
@@ -266,4 +294,3 @@ TEST(test_xthread, performance_test)
 
     pool.CloseThread(true);
 }
-

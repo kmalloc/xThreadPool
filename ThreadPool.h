@@ -30,7 +30,6 @@ namespace xthread {
     class TaskQueue
     {
     public:
-
         void Clear()
         {
             std::unique_lock<std::mutex> lock(m_);
@@ -49,7 +48,7 @@ namespace xthread {
             std::unique_lock<std::mutex> lock(m_);
             while (!exit_ && tasks_.empty()) cv_.wait(lock);
 
-            if (exit_) return false;
+            if (exit_ && tasks_.empty()) return false;
 
             f = std::move(tasks_.front());
             tasks_.pop_front();
@@ -158,7 +157,7 @@ namespace xthread {
             done_ = true;
             for (auto i = 0; i < thread_num_; ++i)
             {
-                queue_[i].PushExitTask([&]() { run_[i]  = false; }, gracefully);
+                queue_[i].PushExitTask([&, i]() { run_[i]  = false; }, gracefully);
             }
 
             return true;
@@ -214,7 +213,7 @@ namespace xthread {
             {
                 task_t fun;
 
-                // steal work if necessary.
+                // steal work if necessary & possible.
                 for (auto i = 0; i < thread_num_; ++i)
                 {
                     if (queue_[(id + i)%thread_num_].TryPop(fun)) break;
@@ -224,9 +223,6 @@ namespace xthread {
 
                 fun();
             }
-
-            // log the exit??
-            // std::cout << "thread " << id << " exiting\n";
         }
 
         ThreadPool(const ThreadPool&) = delete;
