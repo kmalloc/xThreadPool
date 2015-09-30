@@ -22,7 +22,7 @@ void basic_testing()
 
     for (auto i = 0; i < 1024; ++i)
     {
-        pool.PushTask(dt);
+        pool.AddTask(dt);
     }
 
     std::vector<size_t> num = pool.GetTaskNum();
@@ -35,8 +35,8 @@ void basic_testing()
 
     pool.StartWorking();
 
-    pool.PushTask([&]() { i1 = 233; std::unique_lock<std::mutex> lock{m1}; f1 = true; cv1.notify_one();});
-    pool.PushTask([&]() { i2 = 234; std::unique_lock<std::mutex> lock{m2}; f2 = true; cv2.notify_one();});
+    pool.AddTask([&]() { i1 = 233; std::unique_lock<std::mutex> lock{m1}; f1 = true; cv1.notify_one();});
+    pool.AddTask([&]() { i2 = 234; std::unique_lock<std::mutex> lock{m2}; f2 = true; cv2.notify_one();});
 
     {
         std::unique_lock<std::mutex> lock{m1};
@@ -88,11 +88,11 @@ void test_exit()
     auto rt3 = [&]() { v3 = 30; };
     auto rt4 = [&]() { v4 = 40; };
 
-    pool.PushTask([&]() { std::cout << "dummy lambda.\n"; });
-    pool.PushTask(bt1);
-    pool.PushTask(bt2);
-    pool.PushTask(bt3);
-    pool.PushTask(bt4);
+    pool.AddTask([&]() { std::cout << "dummy lambda.\n"; });
+    pool.AddTask(bt1);
+    pool.AddTask(bt2);
+    pool.AddTask(bt3);
+    pool.AddTask(bt4);
 
     pool.StartWorking();
 
@@ -103,10 +103,10 @@ void test_exit()
     }
 
     // following 4 task should not have a chance to run.
-    pool.PushTask(rt1);
-    pool.PushTask(rt2);
-    pool.PushTask(rt3);
-    pool.PushTask(rt4);
+    pool.AddTask(rt1);
+    pool.AddTask(rt2);
+    pool.AddTask(rt3);
+    pool.AddTask(rt4);
 
     // cancel all the threads immediately.
     pool.CloseThread(false);
@@ -147,15 +147,15 @@ void test_exit()
     f1 = f2 = f3 = f4 = false;
     pool.StartWorking();
 
-    pool.PushTask(bt1);
-    pool.PushTask(bt2);
-    pool.PushTask(bt3);
-    pool.PushTask(bt4);
+    pool.AddTask(bt1);
+    pool.AddTask(bt2);
+    pool.AddTask(bt3);
+    pool.AddTask(bt4);
 
-    pool.PushTask(rt1);
-    pool.PushTask(rt2);
-    pool.PushTask(rt3);
-    pool.PushTask(rt4);
+    pool.AddTask(rt1);
+    pool.AddTask(rt2);
+    pool.AddTask(rt3);
+    pool.AddTask(rt4);
 
     // shutdown all the threads after the pending tasks are run.
     pool.CloseThread(true);
@@ -202,6 +202,36 @@ TEST(test_xthread, test_exiting_pool)
     g_test_pass++;
 }
 
+void test_poly_func_type()
+{
+    ThreadPool pool;
+    pool.StartWorking();
+
+    auto f1 = [](int a, std::string s) -> double
+    {
+        auto r = a + 3.1415;
+        std::cout << "lambda with params & return value:" << s << std::endl;
+        return r;
+    };
+
+    auto r1 = pool.AddTask(f1, 1, "f1-1");
+    auto r2 = pool.AddTask(f1, 2, "f1-2");
+
+    ASSERT_DOUBLE_EQ(4.1415, r1.get());
+    ASSERT_DOUBLE_EQ(5.1415, r2.get());
+
+    auto r3 = pool.RunTask(f1, 3, "f1-3");
+    auto r4 = pool.RunTask(f1, 4, "f1-4");
+
+    ASSERT_DOUBLE_EQ(6.1415, r3);
+    ASSERT_DOUBLE_EQ(7.1415, r4);
+}
+
+TEST(test_xthread, poly_func_test)
+{
+    test_poly_func_type();
+}
+
 TEST(test_xthread, performance_test)
 {
     if (g_test_pass < 2) return;
@@ -219,7 +249,7 @@ TEST(test_xthread, performance_test)
     {
         while (1)
         {
-            pool.PushTask(t1);
+            pool.AddTask(t1);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             std::unique_lock<std::mutex> lock{m1};
             if (f1) break;
@@ -230,7 +260,7 @@ TEST(test_xthread, performance_test)
     {
         while (1)
         {
-            pool.PushTask(t2);
+            pool.AddTask(t2);
             std::this_thread::yield();
             // std::this_thread::sleep_for(std::chrono::milliseconds(10));
             std::unique_lock<std::mutex> lock{m2};
@@ -242,7 +272,7 @@ TEST(test_xthread, performance_test)
     {
         while (1)
         {
-            pool.PushTask(t2);
+            pool.AddTask(t2);
             std::this_thread::yield();
             // std::this_thread::sleep_for(std::chrono::milliseconds(10));
             std::unique_lock<std::mutex> lock{m3};

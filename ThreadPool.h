@@ -3,6 +3,8 @@
 
 #include <deque>
 #include <vector>
+#include <memory>
+#include <future>
 #include <functional>
 
 #include <atomic>
@@ -136,7 +138,7 @@ namespace xthread {
 
         // may raise out-of-memory exception.
         template <typename T>
-        bool PushTask(T&& f)
+        bool AddTask(T&& f)
         {
             static_assert(IsFunctor<T, task_t>::value, "invalid function type for the thread pool.");
 
@@ -150,6 +152,31 @@ namespace xthread {
             return queue_[sel].Push(std::forward<T>(f));
         }
 
+        template <class F, class ...ARG>
+        auto AddTask(F&& f, ARG&& ...args) -> std::future<typename std::result_of<F(ARG...)>::type>
+        {
+            using ret_type = typename std::result_of<F(ARG...)>::type;
+
+            // task queue requires the task to be copyable, but packaged_task is only movable.
+            // need to wrap it with a smart pointer
+            auto task = std::make_shared<std::packaged_task<ret_type()>>(
+                    (std::bind(std::forward<F>(f), std::forward<ARG>(args)...)));
+
+            auto res = task->get_future();
+
+            AddTask([task]() { (*task)(); });
+
+            return res;
+        }
+
+        // run synchronously
+        template <class F, class ...ARG>
+        typename std::result_of<F(ARG...)>::type RunTask(F&& f, ARG&& ...args)
+        {
+            auto res = AddTask(std::forward<F>(f), std::forward<ARG>(args)...);
+            return res.get();
+        }
+
         bool CloseThread(bool gracefully)
         {
             if (done_) return false;
@@ -157,7 +184,7 @@ namespace xthread {
             done_ = true;
             for (auto i = 0; i < thread_num_; ++i)
             {
-                queue_[i].PushExitTask([&, i]() { run_[i]  = false; }, gracefully);
+                queue_[i].PushExitTask([this, i]() { run_[i]  = false; }, gracefully);
             }
 
             return true;
@@ -186,7 +213,7 @@ namespace xthread {
             for (auto i = 0; i < thread_num_; ++i)
             {
                 run_[i] = true;
-                threads_.emplace_back([&, i]() { Entry(i); });
+                threads_.emplace_back([this, i]() { Entry(i); });
             }
         }
 
