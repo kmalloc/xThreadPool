@@ -73,15 +73,52 @@ void test_exit()
 {
     ThreadPool pool(4);
 
-    bool f1 = false, f2 = false, f3 = false, f4 = false;
+    int s = 0;
     std::mutex m, m1, m2, m3, m4;
-    std::atomic<int> v1{0}, v2{0}, v3{0}, v4{0}, s{0};
+    std::atomic<int> v1{0}, v2{0}, v3{0}, v4{0};
     std::condition_variable cv, cv1, cv2, cv3, cv4;
+    bool f1 = false, f2 = false, f3 = false, f4 = false;
 
-    auto bt1 = [&]() { s++; cv.notify_one(); std::unique_lock<std::mutex> lock{m1}; while (!f1) cv1.wait(lock); };
-    auto bt2 = [&]() { s++; cv.notify_one(); std::unique_lock<std::mutex> lock{m2}; while (!f2) cv2.wait(lock); };
-    auto bt3 = [&]() { s++; cv.notify_one(); std::unique_lock<std::mutex> lock{m3}; while (!f3) cv3.wait(lock); };
-    auto bt4 = [&]() { s++; cv.notify_one(); std::unique_lock<std::mutex> lock{m4}; while (!f4) cv4.wait(lock); };
+    auto bt1 = [&]()
+    {
+        {
+            std::unique_lock<std::mutex> lock{m};
+            s++;
+        }
+        cv.notify_one();
+        std::unique_lock<std::mutex> lock{m1};
+        while (!f1) cv1.wait(lock);
+    };
+    auto bt2 = [&]()
+    {
+        {
+            std::unique_lock<std::mutex> lock{m};
+            s++;
+        }
+        cv.notify_one();
+        std::unique_lock<std::mutex> lock{m2};
+        while (!f2) cv2.wait(lock);
+    };
+    auto bt3 = [&]()
+    {
+        {
+            std::unique_lock<std::mutex> lock{m};
+            s++;
+        }
+        cv.notify_one();
+        std::unique_lock<std::mutex> lock{m3};
+        while (!f3) cv3.wait(lock);
+    };
+    auto bt4 = [&]()
+    {
+        {
+            std::unique_lock<std::mutex> lock{m};
+            s++;
+        }
+        cv.notify_one();
+        std::unique_lock<std::mutex> lock{m4};
+        while (!f4) cv4.wait(lock);
+    };
 
     auto rt1 = [&]() { v1 = 10; };
     auto rt2 = [&]() { v2 = 20; };
@@ -207,6 +244,8 @@ void test_poly_func_type()
     ThreadPool pool;
     pool.StartWorking();
 
+    std::atomic<int> s{0};
+
     auto f1 = [](int a, std::string s) -> double
     {
         auto r = a + 3.1415;
@@ -214,17 +253,22 @@ void test_poly_func_type()
         return r;
     };
 
-    auto r1 = pool.AddTask(f1, 1, "f1-1");
-    auto r2 = pool.AddTask(f1, 2, "f1-2");
+    auto f2 = []() -> std::string
+    {
+        return std::string("hello");
+    };
+
+    auto f3 = [&s](int a) { s += a + 2; };
+
+    auto r1 = pool.RunTask(f1, 1, "f1-1");
+    auto r2 = pool.RunTask(f1, 2, "f1-2");
+    auto r3 = pool.RunTask(f2);
+    auto r4 = pool.AddTask(f3, 3);
 
     ASSERT_DOUBLE_EQ(4.1415, r1.get());
     ASSERT_DOUBLE_EQ(5.1415, r2.get());
-
-    auto r3 = pool.RunTask(f1, 3, "f1-3");
-    auto r4 = pool.RunTask(f1, 4, "f1-4");
-
-    ASSERT_DOUBLE_EQ(6.1415, r3);
-    ASSERT_DOUBLE_EQ(7.1415, r4);
+    ASSERT_STREQ("hello", r3.get().c_str());
+    ASSERT_TRUE(r4);
 }
 
 TEST(test_xthread, poly_func_test)

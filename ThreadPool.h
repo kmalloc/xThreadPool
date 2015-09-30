@@ -153,28 +153,30 @@ namespace xthread {
         }
 
         template <class F, class ...ARG>
-        auto AddTask(F&& f, ARG&& ...args) -> std::future<typename std::result_of<F(ARG...)>::type>
+        bool AddTask(F&& f, ARG&& ...args)
+        {
+            static_assert(sizeof...(ARG), "false function type, argument required.");
+            auto fun = std::bind(std::forward<F>(f), std::forward<ARG>(args)...);
+            return AddTask(std::move(fun));
+        };
+
+        template <class F, class ...ARG>
+        auto RunTask(F&& f, ARG&& ...args) -> std::future<typename std::result_of<F(ARG...)>::type>
         {
             using ret_type = typename std::result_of<F(ARG...)>::type;
 
             // task queue requires the task to be copyable, but packaged_task is only movable.
-            // need to wrap it with a smart pointer
+            // have to wrap it with a smart pointer.
             auto task = std::make_shared<std::packaged_task<ret_type()>>(
                     (std::bind(std::forward<F>(f), std::forward<ARG>(args)...)));
 
             auto res = task->get_future();
+            AddTask([t = std::move(task)]() { (*t)(); });
 
-            AddTask([task]() { (*task)(); });
+            // auto t2 = std::packaged_task<ret_type()>(std::bind(std::forward<F>(f), std::forward<ARG>(args)...));
+            // AddTask(std::move(t2));
 
             return res;
-        }
-
-        // run synchronously
-        template <class F, class ...ARG>
-        typename std::result_of<F(ARG...)>::type RunTask(F&& f, ARG&& ...args)
-        {
-            auto res = AddTask(std::forward<F>(f), std::forward<ARG>(args)...);
-            return res.get();
         }
 
         bool CloseThread(bool gracefully)
