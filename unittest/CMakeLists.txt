@@ -1,9 +1,8 @@
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -g")
 
 include_directories(.. ../..)
 
-set(THREAD_TEST_FILES
-    testThreadpool.cc)
+set(THREAD_TEST_FILES testThreadpool.cc)
 
 link_directories(..)
 add_executable(test_thread ${THREAD_TEST_FILES})

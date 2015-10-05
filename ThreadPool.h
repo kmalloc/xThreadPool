@@ -1,6 +1,8 @@
 #ifndef _XTHREADPOOL_H_
 #define _XTHREADPOOL_H_
 
+// #include "xPackagedTask.h"
+
 #include <deque>
 #include <vector>
 #include <memory>
@@ -173,8 +175,11 @@ namespace xthread {
             auto res = task->get_future();
             AddTask([t = std::move(task)]() { (*t)(); });
 
-            // auto t2 = std::packaged_task<ret_type()>(std::bind(std::forward<F>(f), std::forward<ARG>(args)...));
-            // AddTask(std::move(t2));
+            /*
+            auto task = xPackagedTask<ret_type()>(std::bind(std::forward<F>(f), std::forward<ARG>(args)...));
+            auto res = task.get_future();
+            AddTask([t = std::move(task)]() mutable { t(); });
+            */
 
             return res;
         }
